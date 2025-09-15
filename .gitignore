@@ -1,0 +1,56 @@
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+env/
+venv/
+.venv/
+ENV/
+
+# Packaging/build
+.build/
+dist/
+build/
+*.egg-info/
+pip-wheel-metadata/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Static analysis / caches
+.mypy_cache/
+.cache/
+*.cache/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter / IPython
+.ipynb_checkpoints
+
+# Project-generated outputs
+phasors/
+datasets/
+lifetime_images/
+lifetime_images_unfiltered/
+# Ignore extracted sample data directory (keep the compressed archive if present)
+sample_data/
+
+# Binary artifacts / datasets (optional)
+# Uncomment if you want to ignore generated .npz files
+# *.npz
+
+# Logs
+*.log

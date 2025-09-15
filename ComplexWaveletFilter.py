@@ -16,14 +16,15 @@ from matplotlib import colors
 import math
 import tifffile as tiff
 import time
-import tkinter as tk
-from tkinter import simpledialog, filedialog
+
 from scipy.optimize import minimize, NonlinearConstraint
 
 # COMPLEX WAVELET FILTER
 
 # Function to select the input folder containing the G, S, and intensity .tif files
 def select_input_folder():
+    import tkinter as tk
+    from tkinter import simpledialog, filedialog
     root = tk.Tk()
     root.withdraw()  # Hide the root window
     input_folder = filedialog.askdirectory(title="Select the input folder containing G.tif, S.tif, and intensity.tif files")
@@ -35,6 +36,8 @@ def select_input_folder():
 
 # Function to prompt user for harmonic (H), tau (target tau value), and flevel
 def get_user_inputs():
+    import tkinter as tk
+    from tkinter import simpledialog, filedialog
     root = tk.Tk()
     root.withdraw()  # Hide the root window
     H = float(simpledialog.askstring("Input", "Enter Harmonic (H):"))
@@ -87,7 +90,7 @@ def anscombe_transform(data):
 
 def perform_dtcwt_transform(data, N):
     transform = dtcwt.Transform2d(biort='Legall', qshift='qshift_a')
-    transformed_data = transform.forward(data, nlevels=N, include_scale=False)
+    transformed_data = transform.forward(data, nlevels=N, include_scale=True)
     return transformed_data, transform
 
 def calculate_median_values(transformed_data):
@@ -131,7 +134,8 @@ def compute_phi_prime(mandrill_t, sigma_g_squared, sigma_n_squared_matrices):
     updated_coefficients = []
 
     max_level = len(mandrill_t.highpasses) - 1
-    local_term = np.sqrt(3) * np.sqrt(sigma_g_squared)
+    # local_term = np.sqrt(3) * np.sqrt(sigma_g_squared)
+    local_term = np.sqrt(3) * sigma_g_squared
 
     for level in range(max_level):
         highpasses_l = mandrill_t.highpasses[level]
@@ -255,66 +259,87 @@ def convert_list_to_array_with_dimensions(lst, rows, columns):
     return array_with_dimensions
 
 # Complex wavelet filter batch processing function
-def process_files(file_paths, G_combined, S_combined, I_combined):
+def process_files(file_paths, G_combined, S_combined, I_combined, flevel):
+
+    # Read the data from file paths:
     G_unfil = load_and_process_image(file_paths["G"])
     S_unfil = load_and_process_image(file_paths["S"])
     Intensity = load_and_process_image(file_paths["intensity"])
 
+    # Validate data loaded properly.,
     if G_unfil is None or S_unfil is None or Intensity is None:
         print("One or more files could not be loaded. Skipping this replicate.")
         return G_combined, S_combined, I_combined
     
-    # Compute Fourier coefficients
+    # Un-normalize G and S by multiplying by Intensity (these are the Fourier coefficients)
     Freal_rescale = G_unfil * Intensity
     Fimag_rescale = S_unfil * Intensity
 
+    # Perform Anscombe transform on all three images, 
+    Freal_ans     = anscombe_transform(Freal_rescale)
+    Fimag_ans     = anscombe_transform(Fimag_rescale)
+    Intensity_ans = anscombe_transform(Intensity)
+    
     # Freal transformations and filtering
-    Freal_ans = anscombe_transform(Freal_rescale)
     Freal_transformed, Freal_transformed_object = perform_dtcwt_transform(Freal_ans, flevel)
     median_values = calculate_median_values(Freal_transformed)
-    sigma_g_squared = median_values / 0.6745
+    sigma_g_squared = (median_values / 0.6745) #** 2
     sigma_n_squared = calculate_local_noise_variance(Freal_transformed, flevel)
     phi_prime = compute_phi_prime(Freal_transformed, sigma_g_squared, sigma_n_squared)
     update_coefficients(Freal_transformed, phi_prime)
     Freal_reconstructed_filtered = perform_inverse_dtcwt_transform(Freal_transformed)
-    Freal_filtered = reverse_anscombe_transform(Freal_reconstructed_filtered)
-
+   
     # Fimag transformations and filtering
-    Fimag_ans = anscombe_transform(Fimag_rescale)
     Fimag_transformed, Fimag_transformed_object = perform_dtcwt_transform(Fimag_ans, flevel)
     median_values = calculate_median_values(Fimag_transformed)
-    sigma_g_squared = median_values / 0.6745
+    sigma_g_squared = (median_values / 0.6745) #** 2
     sigma_n_squared = calculate_local_noise_variance(Fimag_transformed, flevel)
     phi_prime = compute_phi_prime(Fimag_transformed, sigma_g_squared, sigma_n_squared)
     update_coefficients(Fimag_transformed, phi_prime)
     Fimag_reconstructed_filtered = perform_inverse_dtcwt_transform(Fimag_transformed)
-    Fimag_filtered = reverse_anscombe_transform(Fimag_reconstructed_filtered)
-
+    
     # Intensity transformations and filtering
-    Intensity_ans = anscombe_transform(Intensity)
     Intensity_transformed, Intensity_transformed_object = perform_dtcwt_transform(Intensity_ans, flevel)
     median_values = calculate_median_values(Intensity_transformed)
-    sigma_g_squared = median_values / 0.6745
+    sigma_g_squared = (median_values / 0.6745) #** 2
     sigma_n_squared = calculate_local_noise_variance(Intensity_transformed, flevel)
     phi_prime = compute_phi_prime(Intensity_transformed, sigma_g_squared, sigma_n_squared)
     update_coefficients(Intensity_transformed, phi_prime)
     Intensity_reconstructed_filtered = perform_inverse_dtcwt_transform(Intensity_transformed)
+
+    # make a dict of the coefficients generated from the forward transform: 
+    coefficients_dict = {
+        "real": Freal_transformed,
+        "imag": Fimag_transformed,
+        "intensity": Intensity_transformed
+    }
+
+    # Reverse Anscombe transform of all three images: 
+    Freal_filtered = reverse_anscombe_transform(Freal_reconstructed_filtered)
+    Fimag_filtered = reverse_anscombe_transform(Fimag_reconstructed_filtered)
     Intensity_filtered = reverse_anscombe_transform(Intensity_reconstructed_filtered)
 
+    # Renormalize the filtered fourier coefficients to get G and S (filtered)
     G_wavelet_filtered = Freal_filtered / Intensity_filtered
     S_wavelet_filtered = Fimag_filtered / Intensity_filtered
 
-    threshold = 0
+    # Threshold, we can adjust it, perhaps as a user input parameter (not congfigured yet)
+    threshold = 5
     
+    # Remove NaN
     G_array = np.nan_to_num(G_wavelet_filtered)
     S_array = np.nan_to_num(S_wavelet_filtered)
     I_array = np.nan_to_num(Intensity)
 
+    # Intensity mask based on unfiltered intensity.
     threshold_array = I_array > threshold
+
+
     G001_array = np.clip(G_array * threshold_array, -0.1, 1.1)
     S001_array = np.clip(S_array * threshold_array, -0.1, 1.1)
 
-    # Append to combined arrays
+    # Place filtered and thresholded data into the output containers.
+
     if G_combined.size == 0:
         G_combined = G001_array
     else:
@@ -330,31 +355,41 @@ def process_files(file_paths, G_combined, S_combined, I_combined):
     else:
         I_combined = np.hstack((I_combined, I_array))
     
-    return G_combined, S_combined, I_combined
+    # And now we return the updated combined arrays.
+    return G_combined, S_combined, I_combined, coefficients_dict
 
-   
 
 # Complex wavelet filter batch processing function
 def process_unfil_files(file_paths, G_combined, S_combined, I_combined):
+
+    # Read the data from file paths: 
     G_unfil = tiff.imread(file_paths["G"])
     S_unfil = tiff.imread(file_paths["S"])
     Intensity = tiff.imread(file_paths["intensity"])
 
+    # Validate data loaded properly., 
     if G_unfil is None or S_unfil is None or Intensity is None:
         print("One or more files could not be loaded. Skipping this replicate.")
         return G_combined, S_combined, I_combined
 
-    threshold = 0
+    # Threshold, we can adjust it, perhaps as a user input parameter (not configured yet)
+    threshold = 5
     
+    # Remove NaNs (probably makes them 0...)
     G_array = np.nan_to_num(G_unfil)
     S_array = np.nan_to_num(S_unfil)
     I_array = np.nan_to_num(Intensity)
 
+    # Mask based on threshold (an intensity-based mask)
     threshold_array = I_array > threshold
+
+    # Apply threshold to the G and S arrays (we expect these to be between 0 and 1, 
+    # but sometimes we have outliers so we don't hard clip them, give an extra 0.1 margin)
     G001_array = np.clip(G_array * threshold_array, -0.1, 1.1)
     S001_array = np.clip(S_array * threshold_array, -0.1, 1.1)
     
-    # Append to combined arrays
+    # I don't think we combine the datasets here, the thresholded data becomes G_combined, S_combined, and I_combined. 
+
     if G_combined.size == 0:
         G_combined = G001_array
     else:
@@ -370,6 +405,7 @@ def process_unfil_files(file_paths, G_combined, S_combined, I_combined):
     else:
         I_combined = np.hstack((I_combined, I_array))
     
+    # And now we return the updated combined arrays. 
     return G_combined, S_combined, I_combined
     
 # Phasor and lifetime calculation from batch processed data
@@ -503,7 +539,11 @@ if __name__ == "__main__":
         "S": s_tif,
         "intensity": intensity_tif
     }
-    G_combined, S_combined, I_combined = process_files(file_paths, G_combined, S_combined, I_combined)
+
+    # Process the G, S, and intensity .tif files with filtering and without filtering. 
+    G_combined, S_combined, I_combined, _ = process_files(file_paths, G_combined, S_combined, I_combined, flevel)
+
+    # The 'without filtering' processing is just loading the files and applying thresholding/masking. 
     G_combined_unfil, S_combined_unfil, I_combined_unfil  = process_unfil_files(file_paths, G_combined_unfil, S_combined_unfil, I_combined_unfil)
 
     # Define output file names based on the provided flevel and processing conditions
