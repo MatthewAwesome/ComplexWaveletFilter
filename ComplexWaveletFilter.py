@@ -324,7 +324,7 @@ def process_files(file_paths, G_combined, S_combined, I_combined, flevel):
     S_wavelet_filtered = Fimag_filtered / Intensity_filtered
 
     # Threshold, we can adjust it, perhaps as a user input parameter (not congfigured yet)
-    threshold = 5
+    threshold = 0
     
     # Remove NaN
     G_array = np.nan_to_num(G_wavelet_filtered)
@@ -373,7 +373,7 @@ def process_unfil_files(file_paths, G_combined, S_combined, I_combined):
         return G_combined, S_combined, I_combined
 
     # Threshold, we can adjust it, perhaps as a user input parameter (not configured yet)
-    threshold = 5
+    threshold = 0
     
     # Remove NaNs (probably makes them 0...)
     G_array = np.nan_to_num(G_unfil)
