@@ -16,6 +16,10 @@ from matplotlib import colors
 import math
 import tifffile as tiff
 import time
+from skimage import exposure
+from skimage.filters import median
+from skimage.morphology import square
+
 
 from scipy.optimize import minimize, NonlinearConstraint
 
@@ -43,7 +47,8 @@ def get_user_inputs():
     H = float(simpledialog.askstring("Input", "Enter Harmonic (H):"))
     tau = float(simpledialog.askstring("Input", "Enter Target Tau Value (τ):"))
     flevel = int(simpledialog.askstring("Input", "Enter Number of Filtering Levels (flevel):"))
-    return H, tau, flevel
+    ns = float(simpledialog.askstring("Input", "Enter Period of Laser in ns (e.g., 12.820512820513 for 78MHz):")); 
+    return H, tau, flevel, ns
 
 # Function to calculate Gc and Sc
 def calculate_g_and_s(H, tau):
@@ -75,13 +80,16 @@ def calculate_g_and_s(H, tau):
     return Gc, Sc
 
 # File handling functions
-def load_and_process_image(file_path):
+def load_and_process_image(file_path,enhance=False):
     if not os.path.exists(file_path):
         print(f"File not found: {file_path}")
         return None
     image = Image.open(file_path)  # Use PIL to load the image
     image_array = np.array(image)  # Convert to NumPy array
-    return np.nan_to_num(image_array)  # Handle NaN values by replacing them with zeros
+    image_array = np.nan_to_num(image_array)  # Handle NaN values by replacing them with zeros
+    if enhance is True:
+         image_array = median(image_array, square(3))
+    return image_array
 
 
 # Complex wavelet filter calculation functions
@@ -262,9 +270,9 @@ def convert_list_to_array_with_dimensions(lst, rows, columns):
 def process_files(file_paths, G_combined, S_combined, I_combined, flevel):
 
     # Read the data from file paths:
-    G_unfil = load_and_process_image(file_paths["G"])
-    S_unfil = load_and_process_image(file_paths["S"])
-    Intensity = load_and_process_image(file_paths["intensity"])
+    G_unfil = load_and_process_image(file_paths["G"],enhance=False)
+    S_unfil = load_and_process_image(file_paths["S"],enhance=False)
+    Intensity = load_and_process_image(file_paths["intensity"],enhance=False)
 
     # Validate data loaded properly.,
     if G_unfil is None or S_unfil is None or Intensity is None:
@@ -463,7 +471,7 @@ def plot_combined_data(G_combined, S_combined, I_combined, phasor_output_path):
     fig.savefig(phasor_output_path, format='png', dpi=300)
     plt.show()
     
-def calculate_and_plot_lifetime(G_combined, S_combined):
+def calculate_and_plot_lifetime(G_combined, S_combined, ns=12.820512820513, filter=False):
     """
     Calculate the fluorescence lifetime from combined G and S components and plot the result.
 
@@ -474,6 +482,10 @@ def calculate_and_plot_lifetime(G_combined, S_combined):
     Returns:
     numpy.ndarray: Calculated fluorescence lifetime array
     """
+
+    if filter:
+        G_combined = median(G_combined, square(3))
+        S_combined = median(S_combined, square(3))
     # Calculate phase angle theta
     SoverG = S_combined / G_combined
     theta1 = np.arctan(SoverG)
@@ -482,7 +494,7 @@ def calculate_and_plot_lifetime(G_combined, S_combined):
     tantheta = np.tan(theta1)
 
     # 78mHz = period of laser - needs to be converted to nanoseconds (value below)
-    ns = 12.820512820513
+    # ns = 12.820512820513
 
     # Calculate angular frequency (w) from period in nanoseconds (ns)
     w = (2 * np.pi) / ns
@@ -511,7 +523,7 @@ if __name__ == "__main__":
     print(f"Output directory is set to: {output_base_directory}")
 
     # Get harmonic, tau, and flevel from user
-    H, tau, flevel = get_user_inputs()
+    H, tau, flevel,ns = get_user_inputs()
 
     # Automatically calculate Gc and Sc
     Gc, Sc = calculate_g_and_s(H, tau)
@@ -569,11 +581,11 @@ if __name__ == "__main__":
     plot_combined_data(G_combined, S_combined, I_combined, phasor_path)
 
     # Calculate lifetime images and save results
-    T = calculate_and_plot_lifetime(G_combined, S_combined)
+    T = calculate_and_plot_lifetime(G_combined, S_combined, ns=ns, filter=False)
     tiff_path = os.path.join(lifetime_images_dir, tiff_file_name)
     tiff.imwrite(tiff_path, T)
 
-    T_unfil = calculate_and_plot_lifetime(G_combined_unfil, S_combined_unfil)
+    T_unfil = calculate_and_plot_lifetime(G_combined_unfil, S_combined_unfil, ns=ns, filter=False)
     tiff_path_unfil = os.path.join(lifetime_images_unfil_dir, tiff_file_name_unfil)
     tiff.imwrite(tiff_path_unfil, T_unfil)
 

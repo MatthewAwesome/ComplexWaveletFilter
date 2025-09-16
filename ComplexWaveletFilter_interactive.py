@@ -7,6 +7,7 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 import tifffile as tiff
+from skimage import exposure
 
 from ComplexWaveletFilter import (
     calculate_g_and_s,
@@ -166,11 +167,14 @@ def plot_lowpass_image(lp, title="lowpass", cmap="viridis", log_scale=True, down
         plt.show()
 # %%
 # Parameters (edit these variables interactively before running the next cells)
-input_folder = os.path.join(os.path.dirname(__file__), 'sample_data')  # change path as needed
+# input_folder = os.path.join(os.path.dirname(__file__), 'sample_data')  # change path as needed
+input_folder = "D:/AOFLIO_rates/AOFLIO-0035/AOFLIO004/phasor_images_g_s_intensity_LSC"
 
 H = 1.0      # harmonic
-tau = 3.1    # target tau,ns
+tau = 0.25    # target tau,ns
 flevel = 4   # number of filtering levels
+ns = 12.5             # period of laser in ns (for 80MHz laser)
+# ns = 12.820512820513  # period of laser in ns (for 78MHz laser)
 save_outputs = False  # set False to skip writing files
 
 # %%
@@ -202,7 +206,7 @@ file_paths = {"G": g_tif, "S": s_tif, "intensity": intensity_tif}
 G_combined, S_combined, I_combined, coeffs = process_files(file_paths, G_combined, S_combined, I_combined, flevel)
 G_combined_unfil, S_combined_unfil, I_combined_unfil = process_unfil_files(file_paths, G_combined_unfil, S_combined_unfil, I_combined_unfil)
 
-# %% Unpacking the coeffs: 
+# %% 
 # Inspect attributes on a pyramid object and print shapes
 def inspect_pyramid(pyr, name="pyr"):
     print(f"--- {name} ({type(pyr)}) ---")
@@ -266,10 +270,10 @@ print_pyramid_summary(imagHighPasses, "imagHighPasses")
 print_pyramid_summary(intensityHighPasses, "intensityHighPasses")
 
 # Example calls (uncomment to run)
-viz_level(realHighPasses, level=3, show_phase=True)
-viz_multiple_levels(realHighPasses, levels=[0,1,2,3])
-viz_multiple_levels(imagHighPasses, levels=[0,1,2,3])
-viz_multiple_levels(intensityHighPasses, levels=[0,1,2,3])
+viz_level(intensityHighPasses, level=0, show_phase=True)
+# viz_multiple_levels(realHighPasses, levels=[0,1,2,3])
+# viz_multiple_levels(imagHighPasses, levels=[0,1,2,3])
+# viz_multiple_levels(intensityHighPasses, levels=[0,1,2,3])
 # plot_band_across_levels(realHighPasses, band=2)
 # %%
 # Plot and save results
@@ -292,13 +296,13 @@ os.makedirs(lifetime_images_unfil_dir, exist_ok=True)
 phasor_path = os.path.join(phasors_dir, phasor_title)
 plot_combined_data(G_combined, S_combined, I_combined, phasor_path)
 
-T = calculate_and_plot_lifetime(G_combined, S_combined)
+T = calculate_and_plot_lifetime(G_combined, S_combined, ns=ns,filter=True)
 if save_outputs:
     tiff_path = os.path.join(lifetime_images_dir, tiff_file_name)
     tiff.imwrite(tiff_path, T)
     print(f"Lifetime image saved as {tiff_path}")
 
-T_unfil = calculate_and_plot_lifetime(G_combined_unfil, S_combined_unfil)
+T_unfil = calculate_and_plot_lifetime(G_combined_unfil, S_combined_unfil,ns=ns, filter=False)
 if save_outputs:
     tiff_path_unfil = os.path.join(lifetime_images_unfil_dir, tiff_file_name_unfil)
     tiff.imwrite(tiff_path_unfil, T_unfil)
