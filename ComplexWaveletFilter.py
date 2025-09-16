@@ -51,13 +51,12 @@ def get_user_inputs():
     return H, tau, flevel, ns
 
 # Function to calculate Gc and Sc
-def calculate_g_and_s(H, tau):
+def calculate_g_and_s(H, tau, ns=12.820512820513):
     # Define error function for tau
-    def error_function(GS, tau, H):
+    def error_function(GS, tau, H, ns):
         G, S = GS
         M = np.sqrt(G**2 + S**2)
         theta = np.arcsin(S / M)
-        ns = 12.820512820513  # Based on your example
         w = (H * np.pi) / ns
         calculated_tau = np.tan(theta) / (w * 2)
         return (calculated_tau - tau)**2
@@ -74,7 +73,7 @@ def calculate_g_and_s(H, tau):
     circle_constraint = NonlinearConstraint(circle_constraint, 0, 0)
 
     # Minimize error function to find optimal G and S coordinates
-    result = minimize(error_function, initial_guesses[0], args=(tau, H), constraints=[circle_constraint])
+    result = minimize(error_function, initial_guesses[0], args=(tau, H, ns), constraints=[circle_constraint])
     Gc, Sc = result.x
     print(f"Calculated Gc: {Gc}, Sc: {Sc}")
     return Gc, Sc
@@ -97,7 +96,9 @@ def anscombe_transform(data):
     return 2 * np.sqrt(data + (3/8))
 
 def perform_dtcwt_transform(data, N):
-    transform = dtcwt.Transform2d(biort='Legall', qshift='qshift_a')
+    # transform = dtcwt.Transform2d(biort='Legall', qshift='qshift_a')
+    # transform = dtcwt.Transform2d(biort='near_sym_a', qshift='qshift_a')
+    transform = dtcwt.Transform2d(biort='Legall', qshift='qshift_06')
     transformed_data = transform.forward(data, nlevels=N, include_scale=True)
     return transformed_data, transform
 
@@ -189,8 +190,18 @@ def update_coefficients(mandrill_t, phi_prime_matrices):
             mandrill_t.highpasses[level][:, :, band] = phi_prime
 
 def perform_inverse_dtcwt_transform(transformed_data):
-    transform = dtcwt.Transform2d(biort='Legall', qshift='qshift_a')
-    return transform.inverse(transformed_data)
+    # transform = dtcwt.Transform2d(biort='Legall', qshift='qshift_a')
+    # transform = dtcwt.Transform2d(biort='near_sym_a', qshift='qshift_a')
+    transform = dtcwt.Transform2d(biort='Legall', qshift='qshift_06')
+
+    # Make a gains array, d,l: 6 subbands, number of levels
+    gains_array = np.ones((6, len(transformed_data.highpasses)))
+    gains_vector = np.linspace(0.2, 0.8, len(transformed_data.highpasses))
+    for level in range(len(transformed_data.highpasses)):
+        gains_array[:, level] = gains_array[:, level] * gains_vector[level]
+
+
+    return transform.inverse(transformed_data, gain_mask=gains_array)
     
 def reverse_anscombe_transform(y):
     y = np.asarray(y, dtype=np.float64)
@@ -526,7 +537,7 @@ if __name__ == "__main__":
     H, tau, flevel,ns = get_user_inputs()
 
     # Automatically calculate Gc and Sc
-    Gc, Sc = calculate_g_and_s(H, tau)
+    Gc, Sc = calculate_g_and_s(H, tau,ns)
 
     # Define file paths for G, S, and intensity files in the input folder
     g_tif = os.path.join(input_folder, "G.tif")

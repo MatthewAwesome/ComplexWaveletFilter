@@ -167,15 +167,20 @@ def plot_lowpass_image(lp, title="lowpass", cmap="viridis", log_scale=True, down
         plt.show()
 # %%
 # Parameters (edit these variables interactively before running the next cells)
+
 # input_folder = os.path.join(os.path.dirname(__file__), 'sample_data')  # change path as needed
-input_folder = "D:/AOFLIO_rates/AOFLIO-0035/AOFLIO004/phasor_images_g_s_intensity_LSC"
+# ns = 12.820512820513  # period of laser in ns (for 78MHz laser)
+
+# input_folder = "D:/AOFLIO_rates/AOFLIO-0035/AOFLIO004/phasor_images_g_s_intensity_LSC"
+# ns = 12.5             # period of laser in ns (for 80MHz laser)
+
+input_folder = "/Users/matthewellis/Library/CloudStorage/OneDrive-DohenyEyeInstitute/sampleData/phasor_images_g_s_intensity_LSC/region_1"
+ns = 12.5             # period of laser in ns (for 80MHz laser)
 
 H = 1.0      # harmonic
-tau = 0.25    # target tau,ns
-flevel = 4   # number of filtering levels
-ns = 12.5             # period of laser in ns (for 80MHz laser)
-# ns = 12.820512820513  # period of laser in ns (for 78MHz laser)
-save_outputs = False  # set False to skip writing files
+tau = 0.27    # target tau,ns
+flevel = 2   # number of filtering levels
+save_outputs = True  # set False to skip writing files
 
 # %%
 # Prepare paths and check input files
@@ -192,7 +197,7 @@ if not all(map(os.path.exists, [g_tif, s_tif, intensity_tif])):
 
 # %%
 # Compute Gc, Sc (phasor center) and process files
-Gc, Sc = calculate_g_and_s(H, tau)
+Gc, Sc = calculate_g_and_s(H, tau, ns=ns)
 print(f"Gc={Gc:.4f}, Sc={Sc:.4f}")
 
 G_combined = np.array([]).reshape(0, 0)
